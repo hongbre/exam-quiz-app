@@ -34,10 +34,11 @@ exam-quiz-app/
 - `No` (문제번호)
 - `Question` (문제 내용)
 - `Choice A` ~ `Choice E` (보기, 4개/5개 모두 지원)
-- `Answer` (정답: `A~E`, `1~5`, 또는 보기 텍스트)
+- `Answer` (정답: `A~E`, `1~5`, 보기 텍스트, 복수정답은 `A,E` 형태)
 - `Reference` (예시 링크)
 
 `Reference` 값이 있는 문제는 화면에서 `Reference Check` 버튼으로 링크 이동할 수 있습니다.
+복수정답 문제는 해당 보기를 모두 선택해야 정답으로 처리됩니다.
 
 ## 실행
 

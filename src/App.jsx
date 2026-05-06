@@ -27,7 +27,7 @@ function App() {
   });
   const [cycle, setCycle] = useState([]);
   const [index, setIndex] = useState(0);
-  const [selected, setSelected] = useState(null);
+  const [selected, setSelected] = useState([]);
   const [checked, setChecked] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);
 
@@ -55,7 +55,7 @@ function App() {
       setQuestions(parsed);
       setCycle([]);
       setIndex(0);
-      setSelected(null);
+      setSelected([]);
       setChecked(false);
       setCorrectCount(0);
     }
@@ -68,14 +68,18 @@ function App() {
     const selectedCycle = pickQuestionSet(questions, history, cycleSize);
     setCycle(selectedCycle);
     setIndex(0);
-    setSelected(null);
+    setSelected([]);
     setChecked(false);
     setCorrectCount(0);
   }
 
   function checkAnswer() {
-    if (!current || selected === null || checked) return;
-    const isCorrect = selected === current.correctIndex;
+    if (!current || selected.length === 0 || checked) return;
+    const selectedSorted = [...selected].sort((a, b) => a - b);
+    const correctSorted = [...current.correctIndices].sort((a, b) => a - b);
+    const isCorrect =
+      selectedSorted.length === correctSorted.length &&
+      selectedSorted.every((value, idx) => value === correctSorted[idx]);
     setChecked(true);
     if (isCorrect) setCorrectCount((prev) => prev + 1);
 
@@ -87,8 +91,24 @@ function App() {
   function nextQuestion() {
     if (index + 1 >= cycle.length) return;
     setIndex((prev) => prev + 1);
-    setSelected(null);
+    setSelected([]);
     setChecked(false);
+  }
+
+  function onChoiceClick(choiceIndex) {
+    if (!current || checked) return;
+    const isMultiAnswer = current.correctIndices.length > 1;
+    if (!isMultiAnswer) {
+      setSelected([choiceIndex]);
+      return;
+    }
+
+    setSelected((prev) => {
+      if (prev.includes(choiceIndex)) {
+        return prev.filter((v) => v !== choiceIndex);
+      }
+      return [...prev, choiceIndex];
+    });
   }
 
   const isFinished = cycle.length > 0 && index === cycle.length - 1 && checked;
@@ -150,12 +170,16 @@ function App() {
             </strong>
             <span className="chip">{current.category}</span>
           </div>
+          {current.correctIndices.length > 1 && (
+            <p className="hint">이 문제는 복수 정답입니다. 해당하는 보기를 모두 선택하세요.</p>
+          )}
           <h2>{current.question}</h2>
           <div className="choices">
             {current.choices.map((choice, i) => {
-              const picked = selected === i;
-              const correct = checked && i === current.correctIndex;
-              const wrong = checked && picked && i !== current.correctIndex;
+              const picked = selected.includes(i);
+              const isCorrectChoice = current.correctIndices.includes(i);
+              const correct = checked && isCorrectChoice;
+              const wrong = checked && picked && !isCorrectChoice;
 
               return (
                 <button
@@ -163,7 +187,7 @@ function App() {
                   className={`choice ${picked ? "picked" : ""} ${correct ? "correct" : ""} ${
                     wrong ? "wrong" : ""
                   }`}
-                  onClick={() => setSelected(i)}
+                  onClick={() => onChoiceClick(i)}
                   disabled={checked}
                 >
                   {i + 1}. {choice}
@@ -172,7 +196,7 @@ function App() {
             })}
           </div>
           <div className="actions">
-            <button onClick={checkAnswer} disabled={selected === null || checked}>
+            <button onClick={checkAnswer} disabled={selected.length === 0 || checked}>
               정답 확인
             </button>
             <button onClick={nextQuestion} disabled={!checked || index + 1 >= cycle.length}>

@@ -24,9 +24,9 @@ export function parseWorkbook(fileBuffer) {
       const reference = getField(row, "Reference");
       const category = getField(row, "Category") || "기타";
 
-      const correctIndex = findAnswerIndex(answerRaw, choices);
+      const correctIndices = findAnswerIndices(answerRaw, choices);
 
-      if (!question || choices.length < 2 || correctIndex < 0) {
+      if (!question || choices.length < 2 || correctIndices.length === 0) {
         return null;
       }
 
@@ -35,7 +35,7 @@ export function parseWorkbook(fileBuffer) {
         no: questionNo || String(idx + 1),
         question,
         choices,
-        correctIndex,
+        correctIndices,
         category,
         reference,
       };
@@ -62,8 +62,23 @@ function normalizeKey(value) {
     .replace(/\s+/g, " ");
 }
 
-function findAnswerIndex(answerRaw, choices) {
-  if (!answerRaw) return -1;
+function findAnswerIndices(answerRaw, choices) {
+  if (!answerRaw) return [];
+  const tokens = String(answerRaw)
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+
+  const normalizedTokens = tokens.length > 0 ? tokens : [String(answerRaw).trim()];
+  const indices = normalizedTokens
+    .map((token) => findSingleAnswerIndex(token, choices))
+    .filter((idx) => idx >= 0);
+
+  const unique = [...new Set(indices)].sort((a, b) => a - b);
+  return unique.length === normalizedTokens.length ? unique : [];
+}
+
+function findSingleAnswerIndex(answerRaw, choices) {
   const normalized = normalizeAnswer(answerRaw);
   const upper = normalized.toUpperCase();
 
@@ -77,9 +92,10 @@ function findAnswerIndex(answerRaw, choices) {
   if (Number.isInteger(numeric) && numeric >= 1 && numeric <= choices.length) {
     return numeric - 1;
   }
-
   const directMatch = choices.findIndex((choice) => choice === answerRaw.trim());
-  if (directMatch >= 0) return directMatch;
+  if (directMatch >= 0) {
+    return directMatch;
+  }
 
   const relaxedMatch = choices.findIndex(
     (choice) => normalizeAnswer(choice).toUpperCase() === upper
