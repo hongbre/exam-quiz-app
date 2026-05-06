@@ -7,22 +7,22 @@ export function parseWorkbook(fileBuffer) {
 
   return rows
     .map((row, idx) => {
-      const questionNo = String(row.No ?? "").trim();
-      const question = String(row.Question ?? "").trim();
+      const questionNo = getField(row, "No");
+      const question = getField(row, "Question");
       const choicesRaw = [
-        row["Choice A"] ?? "",
-        row["Choice B"] ?? "",
-        row["Choice C"] ?? "",
-        row["Choice D"] ?? "",
-        row["Choice E"] ?? "",
+        getField(row, "Choice A"),
+        getField(row, "Choice B"),
+        getField(row, "Choice C"),
+        getField(row, "Choice D"),
+        getField(row, "Choice E"),
       ];
       const choices = choicesRaw
         .map((v) => String(v).trim())
         .filter((v) => v.length > 0);
 
-      const answerRaw = String(row.Answer ?? "").trim();
-      const reference = String(row.Reference ?? "").trim();
-      const category = String(row.Category ?? "기타").trim() || "기타";
+      const answerRaw = getField(row, "Answer");
+      const reference = getField(row, "Reference");
+      const category = getField(row, "Category") || "기타";
 
       const correctIndex = findAnswerIndex(answerRaw, choices);
 
@@ -43,9 +43,28 @@ export function parseWorkbook(fileBuffer) {
     .filter(Boolean);
 }
 
+function getField(row, targetKey) {
+  if (row[targetKey] !== undefined) return String(row[targetKey]).trim();
+
+  const normalizedTarget = normalizeKey(targetKey);
+  for (const [key, value] of Object.entries(row)) {
+    if (normalizeKey(key) === normalizedTarget) {
+      return String(value ?? "").trim();
+    }
+  }
+  return "";
+}
+
+function normalizeKey(value) {
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
 function findAnswerIndex(answerRaw, choices) {
   if (!answerRaw) return -1;
-  const normalized = answerRaw.trim();
+  const normalized = normalizeAnswer(answerRaw);
   const upper = normalized.toUpperCase();
 
   const alphaMap = { A: 0, B: 1, C: 2, D: 3, E: 4 };
@@ -59,7 +78,35 @@ function findAnswerIndex(answerRaw, choices) {
     return numeric - 1;
   }
 
-  return choices.findIndex((choice) => choice === normalized);
+  const directMatch = choices.findIndex((choice) => choice === answerRaw.trim());
+  if (directMatch >= 0) return directMatch;
+
+  const relaxedMatch = choices.findIndex(
+    (choice) => normalizeAnswer(choice).toUpperCase() === upper
+  );
+  return relaxedMatch;
+}
+
+function normalizeAnswer(value) {
+  const raw = String(value).trim();
+  if (!raw) return "";
+
+  const circledMap = {
+    "①": "1",
+    "②": "2",
+    "③": "3",
+    "④": "4",
+    "⑤": "5",
+  };
+  if (circledMap[raw]) return circledMap[raw];
+
+  return raw
+    .replace(/^choice\s*/i, "")
+    .replace(/[.)\]>\-:]+$/g, "")
+    .replace(/(번|호)\s*$/g, "")
+    .replace(/^\(/, "")
+    .replace(/\)$/, "")
+    .trim();
 }
 
 export function pickQuestionSet(questions, historyMap, cycleSize) {
