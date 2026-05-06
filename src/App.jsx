@@ -1,10 +1,22 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { parseWorkbook, pickQuestionSet, updateHistory } from "./utils/quiz";
 
 const LS_KEY = "quiz-history-v1";
+const workbookModules = import.meta.glob("../question/*.xlsx", {
+  eager: true,
+  import: "default",
+});
+const workbookFiles = Object.entries(workbookModules)
+  .map(([path, url]) => ({
+    path,
+    url,
+    name: path.split("/").pop() ?? path,
+  }))
+  .sort((a, b) => a.name.localeCompare(b.name));
 
 function App() {
   const [questions, setQuestions] = useState([]);
+  const [selectedWorkbook, setSelectedWorkbook] = useState(workbookFiles[0]?.path ?? "");
   const [cycleSize, setCycleSize] = useState(20);
   const [history, setHistory] = useState(() => {
     try {
@@ -29,18 +41,27 @@ function App() {
     return { attempts, wrong, accuracy };
   }, [history]);
 
-  async function onUpload(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const buffer = await file.arrayBuffer();
-    const parsed = parseWorkbook(buffer);
-    setQuestions(parsed);
-    setCycle([]);
-    setIndex(0);
-    setSelected(null);
-    setChecked(false);
-    setCorrectCount(0);
-  }
+  useEffect(() => {
+    async function loadSelectedWorkbook() {
+      const item = workbookFiles.find((file) => file.path === selectedWorkbook);
+      if (!item) {
+        setQuestions([]);
+        return;
+      }
+
+      const response = await fetch(item.url);
+      const buffer = await response.arrayBuffer();
+      const parsed = parseWorkbook(buffer);
+      setQuestions(parsed);
+      setCycle([]);
+      setIndex(0);
+      setSelected(null);
+      setChecked(false);
+      setCorrectCount(0);
+    }
+
+    loadSelectedWorkbook();
+  }, [selectedWorkbook]);
 
   function startCycle() {
     if (questions.length === 0) return;
@@ -78,11 +99,23 @@ function App() {
       <p className="sub">미풀이 우선 + 오답률 높은 분야 우선 출제</p>
 
       <section className="panel">
-        <label className="label">문제 엑셀 업로드 (.xlsx)</label>
-        <input type="file" accept=".xlsx" onChange={onUpload} />
-        <p className="hint">
-          컬럼: No, Question, Choice A~E, Answer, Reference
-        </p>
+        <label className="label">문제 파일 선택 (`question` 디렉토리)</label>
+        <select
+          value={selectedWorkbook}
+          onChange={(e) => setSelectedWorkbook(e.target.value)}
+          disabled={workbookFiles.length === 0}
+        >
+          {workbookFiles.length === 0 ? (
+            <option value="">.xlsx 파일이 없습니다</option>
+          ) : (
+            workbookFiles.map((file) => (
+              <option key={file.path} value={file.path}>
+                {file.name}
+              </option>
+            ))
+          )}
+        </select>
+        <p className="hint">컬럼: No, Question, Choice A~E, Answer, Reference</p>
       </section>
 
       <section className="panel row">
