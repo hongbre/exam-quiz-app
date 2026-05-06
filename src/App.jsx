@@ -81,7 +81,7 @@ function App() {
         <label className="label">문제 엑셀 업로드 (.xlsx)</label>
         <input type="file" accept=".xlsx" onChange={onUpload} />
         <p className="hint">
-          컬럼 예시: question, choice1~5, answer(정답 번호), category
+          컬럼: No, Question, Choice A~E, Answer, Reference
         </p>
       </section>
 
@@ -112,7 +112,9 @@ function App() {
       {current && (
         <section className="panel">
           <div className="meta">
-            <strong>{progress}</strong>
+            <strong>
+              {progress} · No.{current.no}
+            </strong>
             <span className="chip">{current.category}</span>
           </div>
           <h2>{current.question}</h2>
@@ -142,6 +144,12 @@ function App() {
             </button>
             <button onClick={nextQuestion} disabled={!checked || index + 1 >= cycle.length}>
               다음 문제
+            </button>
+            <button
+              onClick={() => window.open(current.reference, "_blank", "noopener,noreferrer")}
+              disabled={!current.reference}
+            >
+              Reference Check
             </button>
           </div>
         </section>

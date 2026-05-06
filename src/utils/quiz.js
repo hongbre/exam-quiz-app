@@ -7,43 +7,59 @@ export function parseWorkbook(fileBuffer) {
 
   return rows
     .map((row, idx) => {
-      const question = String(row.question ?? row.문제 ?? "").trim();
+      const questionNo = String(row.No ?? "").trim();
+      const question = String(row.Question ?? "").trim();
       const choicesRaw = [
-        row.choice1 ?? row.보기1 ?? "",
-        row.choice2 ?? row.보기2 ?? "",
-        row.choice3 ?? row.보기3 ?? "",
-        row.choice4 ?? row.보기4 ?? "",
-        row.choice5 ?? row.보기5 ?? "",
+        row["Choice A"] ?? "",
+        row["Choice B"] ?? "",
+        row["Choice C"] ?? "",
+        row["Choice D"] ?? "",
+        row["Choice E"] ?? "",
       ];
       const choices = choicesRaw
         .map((v) => String(v).trim())
         .filter((v) => v.length > 0);
 
-      const answerRaw = String(row.answer ?? row.정답 ?? "").trim();
-      const answerIndex = Number(answerRaw) - 1;
-      const answerText = String(row.answerText ?? row.정답텍스트 ?? "").trim();
-      const category = String(row.category ?? row.분야 ?? "기타").trim() || "기타";
+      const answerRaw = String(row.Answer ?? "").trim();
+      const reference = String(row.Reference ?? "").trim();
+      const category = String(row.Category ?? "기타").trim() || "기타";
 
-      let correctIndex = -1;
-      if (Number.isInteger(answerIndex) && answerIndex >= 0 && answerIndex < choices.length) {
-        correctIndex = answerIndex;
-      } else if (answerText) {
-        correctIndex = choices.findIndex((v) => v === answerText);
-      }
+      const correctIndex = findAnswerIndex(answerRaw, choices);
 
       if (!question || choices.length < 2 || correctIndex < 0) {
         return null;
       }
 
       return {
-        id: `${idx}-${question.slice(0, 20)}`,
+        id: questionNo ? `no-${questionNo}` : `${idx}-${question.slice(0, 20)}`,
+        no: questionNo || String(idx + 1),
         question,
         choices,
         correctIndex,
         category,
+        reference,
       };
     })
     .filter(Boolean);
+}
+
+function findAnswerIndex(answerRaw, choices) {
+  if (!answerRaw) return -1;
+  const normalized = answerRaw.trim();
+  const upper = normalized.toUpperCase();
+
+  const alphaMap = { A: 0, B: 1, C: 2, D: 3, E: 4 };
+  if (Object.hasOwn(alphaMap, upper)) {
+    const idx = alphaMap[upper];
+    return idx < choices.length ? idx : -1;
+  }
+
+  const numeric = Number(normalized);
+  if (Number.isInteger(numeric) && numeric >= 1 && numeric <= choices.length) {
+    return numeric - 1;
+  }
+
+  return choices.findIndex((choice) => choice === normalized);
 }
 
 export function pickQuestionSet(questions, historyMap, cycleSize) {
