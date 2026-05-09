@@ -1,68 +1,104 @@
-import * as XLSX from "xlsx";
+const CHOICE_ORDER = ["A", "B", "C", "D", "E", "F"];
 
-export function parseWorkbook(fileBuffer) {
-  const workbook = XLSX.read(fileBuffer, { type: "array" });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+/**
+ * @param {unknown} raw
+ * @param {{ category?: string }} [options]
+ */
+export function parseJsonQuestions(raw, options = {}) {
+  const items = Array.isArray(raw) ? raw : [];
+  const category = options.category ?? "기타";
 
-  return rows
-    .map((row, idx) => {
-      const questionNo = getField(row, "No");
-      const question = getField(row, "Question");
-      const choicesRaw = [
-        getField(row, "Choice A"),
-        getField(row, "Choice B"),
-        getField(row, "Choice C"),
-        getField(row, "Choice D"),
-        getField(row, "Choice E"),
-      ];
-      const choices = choicesRaw
-        .map((v) => String(v).trim())
-        .filter((v) => v.length > 0);
-
-      const answerRaw = getField(row, "Answer");
-      const reference = getField(row, "Reference");
-      const category = getField(row, "Category") || "기타";
-
-      const correctIndices = findAnswerIndices(answerRaw, choices);
-
-      if (!question || choices.length < 2 || correctIndices.length === 0) {
-        return null;
-      }
-
-      return {
-        id: questionNo ? `no-${questionNo}` : `${idx}-${question.slice(0, 20)}`,
-        no: questionNo || String(idx + 1),
-        question,
-        choices,
-        correctIndices,
-        category,
-        reference,
-      };
-    })
+  return items
+    .map((row, idx) => normalizeQuestion(row, idx, category))
     .filter(Boolean);
 }
 
-function getField(row, targetKey) {
-  if (row[targetKey] !== undefined) return String(row[targetKey]).trim();
+function normalizeQuestion(row, idx, category) {
+  if (!row || typeof row !== "object") return null;
 
-  const normalizedTarget = normalizeKey(targetKey);
-  for (const [key, value] of Object.entries(row)) {
-    if (normalizeKey(key) === normalizedTarget) {
-      return String(value ?? "").trim();
+  const questionNo = pickString(row, ["no", "No"]);
+  const question = pickString(row, ["question", "Question"]);
+  const choicesObj = pickObject(row, ["choices", "Choices"]);
+  if (!choicesObj) return null;
+
+  const choiceLetters = [];
+  const choices = [];
+  for (const letter of CHOICE_ORDER) {
+    const text = String(choicesObj[letter] ?? "").trim();
+    if (text.length > 0) {
+      choiceLetters.push(letter);
+      choices.push(text);
+    }
+  }
+
+  const answerRaw = pickString(row, ["answer", "Answer"]);
+  const reference = pickString(row, ["reference", "Reference"]);
+  const answerExplanation = pickString(row, ["answerExplanation", "AnswerExplanation"]);
+  const explanationsObj = pickObject(row, ["explanations", "Explanations"]) ?? {};
+
+  const explanations = {};
+  for (const letter of choiceLetters) {
+    const exp = pickExplanationForLetter(explanationsObj, letter);
+    if (exp) {
+      explanations[letter] = exp;
+    }
+  }
+
+  const correctIndices = findAnswerIndices(answerRaw, choiceLetters, choices);
+
+  if (!question || choices.length < 2 || correctIndices.length === 0) {
+    return null;
+  }
+
+  return {
+    id: questionNo ? `no-${questionNo}` : `${idx}-${question.slice(0, 20)}`,
+    no: questionNo || String(idx + 1),
+    question,
+    choiceLetters,
+    choices,
+    correctIndices,
+    category,
+    reference,
+    answerExplanation,
+    explanations,
+  };
+}
+
+function pickString(obj, keys) {
+  for (const k of keys) {
+    if (obj[k] !== undefined && obj[k] !== null) {
+      return String(obj[k]).trim();
     }
   }
   return "";
 }
 
-function normalizeKey(value) {
-  return String(value)
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ");
+function pickObject(obj, keys) {
+  for (const k of keys) {
+    const v = obj[k];
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      return v;
+    }
+  }
+  return null;
 }
 
-function findAnswerIndices(answerRaw, choices) {
+/** explanations 객체의 키가 A/a 등으로 달라도 보기 문자와 매칭 */
+function pickExplanationForLetter(explanationsObj, letter) {
+  const upper = String(letter).toUpperCase();
+  const direct = explanationsObj[letter] ?? explanationsObj[upper];
+  if (direct != null && String(direct).trim()) {
+    return String(direct).trim();
+  }
+  for (const [key, value] of Object.entries(explanationsObj)) {
+    if (String(key).trim().toUpperCase() === upper && String(value).trim()) {
+      return String(value).trim();
+    }
+  }
+  return "";
+}
+
+function findAnswerIndices(answerRaw, choiceLetters, choices) {
   if (!answerRaw) return [];
   const tokens = String(answerRaw)
     .split(",")
@@ -71,36 +107,38 @@ function findAnswerIndices(answerRaw, choices) {
 
   const normalizedTokens = tokens.length > 0 ? tokens : [String(answerRaw).trim()];
   const indices = normalizedTokens
-    .map((token) => findSingleAnswerIndex(token, choices))
+    .map((token) => findSingleAnswerIndex(token, choiceLetters, choices))
     .filter((idx) => idx >= 0);
 
   const unique = [...new Set(indices)].sort((a, b) => a - b);
   return unique.length === normalizedTokens.length ? unique : [];
 }
 
-function findSingleAnswerIndex(answerRaw, choices) {
+function findSingleAnswerIndex(answerRaw, choiceLetters, choices) {
   const normalized = normalizeAnswer(answerRaw);
   const upper = normalized.toUpperCase();
 
-  const alphaMap = { A: 0, B: 1, C: 2, D: 3, E: 4 };
+  const letterIdx = choiceLetters.indexOf(upper);
+  if (letterIdx >= 0) return letterIdx;
+
+  const alphaMap = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5 };
   if (Object.hasOwn(alphaMap, upper)) {
-    const idx = alphaMap[upper];
-    return idx < choices.length ? idx : -1;
+    const letter = CHOICE_ORDER[alphaMap[upper]];
+    const idx = choiceLetters.indexOf(letter);
+    return idx >= 0 ? idx : -1;
   }
 
   const numeric = Number(normalized);
   if (Number.isInteger(numeric) && numeric >= 1 && numeric <= choices.length) {
     return numeric - 1;
   }
-  const directMatch = choices.findIndex((choice) => choice === answerRaw.trim());
-  if (directMatch >= 0) {
-    return directMatch;
-  }
 
-  const relaxedMatch = choices.findIndex(
+  const directMatch = choices.findIndex((choice) => choice === String(answerRaw).trim());
+  if (directMatch >= 0) return directMatch;
+
+  return choices.findIndex(
     (choice) => normalizeAnswer(choice).toUpperCase() === upper
   );
-  return relaxedMatch;
 }
 
 function normalizeAnswer(value) {
@@ -113,6 +151,7 @@ function normalizeAnswer(value) {
     "③": "3",
     "④": "4",
     "⑤": "5",
+    "⑥": "6",
   };
   if (circledMap[raw]) return circledMap[raw];
 

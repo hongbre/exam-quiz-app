@@ -100,13 +100,54 @@ button:disabled {
 
 .choices {
   display: grid;
-  gap: 8px;
+  gap: 12px;
   margin-top: 12px;
+}
+
+.choice-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .choice {
   text-align: left;
   background: #ffffff;
+  width: 100%;
+}
+
+.choice-explanation {
+  margin: 0 0 0 4px;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #374151;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  white-space: pre-wrap;
+}
+
+.answer-explanation {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.answer-explanation-title {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #111827;
+}
+
+.answer-explanation-body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #374151;
+  white-space: pre-wrap;
 }
 
 .choice.picked {

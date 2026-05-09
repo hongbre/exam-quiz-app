@@ -4,41 +4,37 @@ React + Vite 기반 객관식 학습 앱입니다.
 
 ## 주요 기능
 
-- 프로젝트 루트 `question` 디렉토리의 `.xlsx` 파일 자동 인식
-- 파일명 셀렉트 박스로 문제 세트 선택
+- `src/data` 디렉토리의 `.json` 문제 세트 자동 인식
+- 파일명 셀렉트 박스로 세트 선택
 - 랜덤 사이클 출제 (사이클 문제 수 지정 가능)
 - 우선순위 출제:
   - 미풀이 문제 최우선
-  - 오답률 높은 분야 문제 차우선
-- 정답/오답 하이라이팅
-  - 정답: 녹색
-  - 오답: 적색
+  - 오답률 높은 분야(파일 단위) 우선
+- 정답/오답 하이라이팅 (녹색 / 적색)
+- 정답 확인 후 각 보기별 설명(`explanations`) 및 정답 해설(`answerExplanation`) 표시
 
 ## 파일 배치
 
-프로젝트 루트에 `question` 디렉토리를 만들고 `.xlsx` 파일을 넣어주세요.
-
-예시:
+`src/data` 아래에 문제 배열 JSON을 둡니다.
 
 ```text
 exam-quiz-app/
-  question/
-    set-1.xlsx
-    set-2.xlsx
+  src/
+    data/
+      saa-c03.json
 ```
 
-## 엑셀 컬럼 형식
+## JSON 스키마 (배열의 각 요소)
 
-다음 컬럼명을 사용합니다.
+필드명은 **camelCase** 또는 **PascalCase** 모두 허용합니다.
 
-- `No` (문제번호)
-- `Question` (문제 내용)
-- `Choice A` ~ `Choice E` (보기, 4개/5개 모두 지원)
-- `Answer` (정답: `A~E`, `1~5`, 보기 텍스트, 복수정답은 `A,E` 형태)
-- `Reference` (예시 링크)
-
-`Reference` 값이 있는 문제는 화면에서 `Reference Check` 버튼으로 링크 이동할 수 있습니다.
-복수정답 문제는 해당 보기를 모두 선택해야 정답으로 처리됩니다.
+- `no` / `No`: 문제 번호
+- `question` / `Question`: 지문
+- `choices` / `Choices`: 객체. 키 `A` ~ `F`, 값은 보기 문자열. 비어 있지 않은 키만 출제에 사용됩니다.
+- `answer` / `Answer`: 단일 `A`~`F`, `1`~`6`, 보기 텍스트, 또는 복수 정답 `A,E` 형태 (해당 보기를 **모두** 선택해야 정답)
+- `reference` / `Reference`: 참고 링크 (없으면 Reference Check 비활성)
+- `answerExplanation` / `AnswerExplanation`: 정답 확인 후 표시할 전체 해설
+- `explanations` / `Explanations`: 보기별 설명 객체 (`{ "A": "…", "B": "…", … }`). 정답 확인 후 각 보기 아래에 표시됩니다.
 
 ## 실행
 

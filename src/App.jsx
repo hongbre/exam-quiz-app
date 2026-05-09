@@ -1,22 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
-import { parseWorkbook, pickQuestionSet, updateHistory } from "./utils/quiz";
+import { parseJsonQuestions, pickQuestionSet, updateHistory } from "./utils/quiz";
 
-const LS_KEY = "quiz-history-v1";
-const workbookModules = import.meta.glob("../question/*.xlsx", {
-  eager: true,
-  import: "default",
-});
-const workbookFiles = Object.entries(workbookModules)
-  .map(([path, url]) => ({
-    path,
-    url,
-    name: path.split("/").pop() ?? path,
-  }))
+const LS_KEY = "quiz-history-v2";
+
+const jsonModules = import.meta.glob("./data/*.json", { eager: true });
+const dataFiles = Object.entries(jsonModules)
+  .map(([path, mod]) => {
+    const name = path.split("/").pop() ?? path;
+    const baseName = name.replace(/\.json$/i, "") || name;
+    const raw = mod?.default ?? mod;
+    return { path, name, baseName, raw };
+  })
   .sort((a, b) => a.name.localeCompare(b.name));
 
 function App() {
   const [questions, setQuestions] = useState([]);
-  const [selectedWorkbook, setSelectedWorkbook] = useState(workbookFiles[0]?.path ?? "");
+  const [selectedFile, setSelectedFile] = useState(dataFiles[0]?.path ?? "");
   const [cycleSize, setCycleSize] = useState(20);
   const [history, setHistory] = useState(() => {
     try {
@@ -42,26 +41,19 @@ function App() {
   }, [history]);
 
   useEffect(() => {
-    async function loadSelectedWorkbook() {
-      const item = workbookFiles.find((file) => file.path === selectedWorkbook);
-      if (!item) {
-        setQuestions([]);
-        return;
-      }
-
-      const response = await fetch(item.url);
-      const buffer = await response.arrayBuffer();
-      const parsed = parseWorkbook(buffer);
-      setQuestions(parsed);
-      setCycle([]);
-      setIndex(0);
-      setSelected([]);
-      setChecked(false);
-      setCorrectCount(0);
+    const item = dataFiles.find((f) => f.path === selectedFile);
+    if (!item) {
+      setQuestions([]);
+      return;
     }
-
-    loadSelectedWorkbook();
-  }, [selectedWorkbook]);
+    const parsed = parseJsonQuestions(item.raw, { category: item.baseName });
+    setQuestions(parsed);
+    setCycle([]);
+    setIndex(0);
+    setSelected([]);
+    setChecked(false);
+    setCorrectCount(0);
+  }, [selectedFile]);
 
   function startCycle() {
     if (questions.length === 0) return;
@@ -119,23 +111,23 @@ function App() {
       <p className="sub">미풀이 우선 + 오답률 높은 분야 우선 출제</p>
 
       <section className="panel">
-        <label className="label">문제 파일 선택 (`question` 디렉토리)</label>
+        <label className="label">문제 세트 선택 (`src/data`)</label>
         <select
-          value={selectedWorkbook}
-          onChange={(e) => setSelectedWorkbook(e.target.value)}
-          disabled={workbookFiles.length === 0}
+          value={selectedFile}
+          onChange={(e) => setSelectedFile(e.target.value)}
+          disabled={dataFiles.length === 0}
         >
-          {workbookFiles.length === 0 ? (
-            <option value="">.xlsx 파일이 없습니다</option>
+          {dataFiles.length === 0 ? (
+            <option value="">JSON 파일이 없습니다</option>
           ) : (
-            workbookFiles.map((file) => (
+            dataFiles.map((file) => (
               <option key={file.path} value={file.path}>
                 {file.name}
               </option>
             ))
           )}
         </select>
-        <p className="hint">컬럼: No, Question, Choice A~E, Answer, Reference</p>
+        <p className="hint">보기 A~F, Answer, Reference, AnswerExplanation, Explanations</p>
       </section>
 
       <section className="panel row">
@@ -176,33 +168,53 @@ function App() {
           <h2>{current.question}</h2>
           <div className="choices">
             {current.choices.map((choice, i) => {
+              const letter = current.choiceLetters[i];
               const picked = selected.includes(i);
               const isCorrectChoice = current.correctIndices.includes(i);
               const correct = checked && isCorrectChoice;
               const wrong = checked && picked && !isCorrectChoice;
+              const explanation = (current.explanations[letter] ?? "").trim();
+              // 정답 보기: explanations에 텍스트가 있을 때만 표시. 오답·미선택 보기: 설명 없으면 '—'
+              const showChoiceExplanation =
+                checked &&
+                (!isCorrectChoice || explanation.length > 0);
 
               return (
-                <button
-                  key={`${current.id}-${i}`}
-                  className={`choice ${picked ? "picked" : ""} ${correct ? "correct" : ""} ${
-                    wrong ? "wrong" : ""
-                  }`}
-                  onClick={() => onChoiceClick(i)}
-                  disabled={checked}
-                >
-                  {i + 1}. {choice}
-                </button>
+                <div key={`${current.id}-${letter}`} className="choice-block">
+                  <button
+                    type="button"
+                    className={`choice ${picked ? "picked" : ""} ${correct ? "correct" : ""} ${
+                      wrong ? "wrong" : ""
+                    }`}
+                    onClick={() => onChoiceClick(i)}
+                    disabled={checked}
+                  >
+                    {letter}. {choice}
+                  </button>
+                  {showChoiceExplanation ? (
+                    <div className="choice-explanation">
+                      {isCorrectChoice ? explanation : explanation || "—"}
+                    </div>
+                  ) : null}
+                </div>
               );
             })}
           </div>
+          {checked && current.answerExplanation ? (
+            <div className="answer-explanation">
+              <h3 className="answer-explanation-title">정답 해설</h3>
+              <div className="answer-explanation-body">{current.answerExplanation}</div>
+            </div>
+          ) : null}
           <div className="actions">
-            <button onClick={checkAnswer} disabled={selected.length === 0 || checked}>
+            <button type="button" onClick={checkAnswer} disabled={selected.length === 0 || checked}>
               정답 확인
             </button>
-            <button onClick={nextQuestion} disabled={!checked || index + 1 >= cycle.length}>
+            <button type="button" onClick={nextQuestion} disabled={!checked || index + 1 >= cycle.length}>
               다음 문제
             </button>
             <button
+              type="button"
               onClick={() => window.open(current.reference, "_blank", "noopener,noreferrer")}
               disabled={!current.reference}
             >
