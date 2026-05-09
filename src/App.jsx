@@ -165,7 +165,7 @@ function App() {
           {current.correctIndices.length > 1 && (
             <p className="hint">이 문제는 복수 정답입니다. 해당하는 보기를 모두 선택하세요.</p>
           )}
-          <h2>{current.question}</h2>
+          <h4>{current.question}</h4>
           <div className="choices">
             {current.choices.map((choice, i) => {
               const letter = current.choiceLetters[i];
